@@ -14,11 +14,10 @@ double kineticIntegral(const double p, const double q, rowvec Rp, rowvec Rq);
 double nuclearAttarctionIntegral(const double p, const double q, const int Z, const int Rp, const int Rq, const mat R);
 double overlapIntegral(const double p, const double q, rowvec Rp, rowvec Rq);
 double errorFunction(double arg);
-vec normalize(vec C, mat S);
 double electronInteractionIntegral(const int p, const int r, const int q, const int s,
                                    const int  Rp, const int  Rr, const int  Rq, const int  Rs,
                                    vec alpha,mat R, mat S);
-
+vec normalize(vec C, mat S);
 int main()
 {
 
@@ -29,7 +28,9 @@ int main()
 
     uint nBasisFunc = 4;
     uint nNuclei    = 2;
-    uint nSteps     = 20;
+    uint nSteps     = 50;
+    double dt       = 0.1;
+    double gamma    = 1.0;
 
     uint Z = 1;
 
@@ -47,7 +48,10 @@ int main()
     mat S = zeros(nOrbitals,nOrbitals);
     mat F = zeros(nOrbitals,nOrbitals);
     mat R = zeros(nNuclei,3);
-    vec C = zeros(nOrbitals);
+
+    vec C = ones(nOrbitals)*0.125;
+    vec Cminus = ones(nOrbitals)*0.125;
+    vec Cplus = ones(nOrbitals)*0.125;
 
     double ****Q;
     Q = new double***[nOrbitals];
@@ -131,23 +135,34 @@ int main()
 
 
         /*-----------------------------------------------------------------------------------------------------------*/
-        //Diagonalize S:
+        //Calculate Ctilde:
+        Cplus = (2*C - (1-gamma*dt*0.5)*Cminus - dt*dt* F * C)/(1+gamma*dt*0.5);
 
-        vec s;
-        mat U;
-        eig_sym(s, U, S);
+        //Calculate lambda:
+        double a,b,c = 0.0;
 
-        mat V = U*diagmat(1.0/sqrt(s));
+        a = dot(C, S*S*S*C);
+        b = -2*dot(Cplus,S*S*C);
+        c = dot(Cplus,S*Cplus)-1;
 
-        F = V.t() * F * V;
+
+        vec2 lambdaVec;
+        lambdaVec(0)  = fabs((-b + sqrt(b*b - 4*a*c)) /(2*a));
+        lambdaVec(1)  = fabs((-b - sqrt(b*b - 4*a*c)) /(2*a));
+
+        double lambda = lambdaVec.min();
 
 
-        vec eps;
-        mat Cmat;
-        eig_sym(eps, Cmat, F);
+        //Calculate C(t+h):
+        Cplus -= lambda*S*C;
 
-        C = V*Cmat.col(0);
+
+        //update C
+        Cminus = C;
+        C = Cplus;
         C = normalize(C,S);
+
+
 
 
         /*-----------------------------------------------------------------------------------------------------------*/
@@ -172,9 +187,9 @@ int main()
             }
         }
 
-        Eg +=1/sqrt(dot(R.row(0) - R.row(1),R.row(0)- R.row(1)));
+//        Eg +=1/sqrt(dot(R.row(0) - R.row(1),R.row(0)- R.row(1)));
 
-                cout <<"Energy: " << Eg <<" step: " << step << endl;
+        cout <<"Energy: " << Eg <<" step: " << step << endl;
 
 
     }
@@ -221,7 +236,6 @@ vec normalize(vec C, mat S){
     return C/sqrt(normFactor);
 
 }
-
 /*-----------------------------------------------------------------------------------------------------------*/
 double electronInteractionIntegral(const int p, const int r, const int q, const int s,
                                    const int Rp, const int Rr, const int Rq, const int Rs,
