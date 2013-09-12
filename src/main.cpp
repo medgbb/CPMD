@@ -8,8 +8,8 @@
 using namespace arma;
 using namespace std;
 
-
-double nuclearRepulsion();
+double calculateEnergy(double ****Q, const mat h, const vec C);
+double nuclearRepulsion(const mat R);
 double kineticIntegral(const double p, const double q, rowvec Rp, rowvec Rq);
 double nuclearAttarctionIntegral(const double p, const double q, const int Z, const int Rp, const int Rq, const mat R);
 double overlapIntegral(const double p, const double q, rowvec Rp, rowvec Rq);
@@ -25,12 +25,13 @@ int main()
 
 
     //System configuration:
-
     uint nBasisFunc = 4;
     uint nNuclei    = 2;
-    uint nSteps     = 50;
+    uint nSteps     = 100;
     double dt       = 0.1;
     double gamma    = 1.0;
+    double Eg;
+    double a, b, c, lambda;
 
     uint Z = 1;
 
@@ -40,6 +41,7 @@ int main()
     alpha(2) = 0.444529;
     alpha(3) = 0.1219492;
 
+    /*-----------------------------------------------------------------------------------------------------------*/
     //Initilize:
     uint nOrbitals = nBasisFunc * nNuclei;
 
@@ -49,9 +51,12 @@ int main()
     mat F = zeros(nOrbitals,nOrbitals);
     mat R = zeros(nNuclei,3);
 
-    vec C = ones(nOrbitals)*0.125;
-    vec Cminus = ones(nOrbitals)*0.125;
-    vec Cplus = ones(nOrbitals)*0.125;
+    double q = 0.125;
+    vec C = ones(nOrbitals)*q;
+    vec Cminus = ones(nOrbitals)*q;
+    vec Cplus = ones(nOrbitals)*q;
+
+    vec2 lambdaVec;
 
     double ****Q;
     Q = new double***[nOrbitals];
@@ -114,9 +119,12 @@ int main()
 
     /*-----------------------------------------------------------------------------------------------------------*/
 
+    //Loop over time
+    for(uint step=0; step <= nSteps; step++){
 
-    for(uint step=0; step < nSteps; step++){
+        //Zero out elements
         G = zeros(nOrbitals,nOrbitals);
+        Eg = 0.0;
 
         //Set up the G matrix:
         for(uint p=0; p < nOrbitals; p++){
@@ -132,70 +140,50 @@ int main()
         /*-----------------------------------------------------------------------------------------------------------*/
         //Set up the F matrix
         F = h + G;
-
-
         /*-----------------------------------------------------------------------------------------------------------*/
         //Calculate Ctilde:
         Cplus = (2*C - (1-gamma*dt*0.5)*Cminus - dt*dt* F * C)/(1+gamma*dt*0.5);
 
         //Calculate lambda:
-        double a,b,c = 0.0;
-
         a = dot(C, S*S*S*C);
-        b = -2*dot(Cplus,S*S*C);
-        c = dot(Cplus,S*Cplus)-1;
+        b = -2*dot(S*Cplus,S*C);
+        c = dot(Cplus,S*Cplus)-1.0;
 
+        lambdaVec(0)  = (-b + sqrt(b*b - 4*a*c)) /(2*a);
+        lambdaVec(1)  = (-b - sqrt(b*b - 4*a*c)) /(2*a);
 
-        vec2 lambdaVec;
-        lambdaVec(0)  = fabs((-b + sqrt(b*b - 4*a*c)) /(2*a));
-        lambdaVec(1)  = fabs((-b - sqrt(b*b - 4*a*c)) /(2*a));
+        if(lambdaVec(1) < 0 && lambdaVec(0) < 0 ){
+            cerr << "negative roots!!" <<endl;
+            cerr << lambdaVec <<endl;
+            exit (EXIT_FAILURE);
 
-        double lambda = lambdaVec.min();
+        }
 
+        if(lambdaVec(0) < lambdaVec(1) && lambdaVec(0) > 0.0 ){
+            lambda = lambdaVec(0);
+        }else{
+            lambda = lambdaVec(1) ;
+        }
 
         //Calculate C(t+h):
         Cplus -= lambda*S*C;
 
-
         //update C
         Cminus = C;
         C = Cplus;
-        C = normalize(C,S);
-
-
-
 
         /*-----------------------------------------------------------------------------------------------------------*/
         //Calculate energy:
-
-        double Eg=0.0;
-
-        for(uint p=0; p < nOrbitals; p++){
-            for(uint q=0; q < nOrbitals; q++){
-                Eg += C(p)*C(q)*h(p,q);
-            }
-        }
-
-        Eg = 2*Eg;
-        for(uint p=0; p < nOrbitals; p++){
-            for(uint r=0; r < nOrbitals; r++){
-                for(uint q=0; q< nOrbitals; q++){
-                    for(uint s=0; s < nOrbitals; s++){
-                        Eg +=Q[p][r][q][s]*C(p)*C(q)*C(r)*C(s);
-                    }
-                }
-            }
-        }
-
-//        Eg +=1/sqrt(dot(R.row(0) - R.row(1),R.row(0)- R.row(1)));
-
-        cout <<"Energy: " << Eg <<" step: " << step << endl;
+        Eg = calculateEnergy(Q,h,C);
+        /*-----------------------------------------------------------------------------------------------------------*/
 
 
-    }
+        cout.precision(8);
+        //        cout <<"Energy: " << Eg <<" step: " << step << endl;
+        cout << Eg <<"," << endl;
 
 
-
+    }// Endof time loop
 
     /*-----------------------------------------------------------------------------------------------------------*/
 
@@ -213,13 +201,47 @@ int main()
 
     return 0;
 }
+/*-----------------------------------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------------------------------*/
+/*-----------------------------------------------------------------------------------------------------------*/
+double calculateEnergy(double ****Q, const mat h, const vec C){
+    double Eg = 0.0;
+
+
+    //One-body term
+    for(uint p=0; p < C.n_elem; p++){
+        for(uint q=0; q < C.n_elem; q++){
+            Eg += C(p)*C(q)*h(p,q);
+        }
+    }
+    Eg = 2*Eg;
+
+    //Two-body term
+    for(uint p=0; p < C.n_elem; p++){
+        for(uint r=0; r < C.n_elem; r++){
+            for(uint q=0; q< C.n_elem; q++){
+                for(uint s=0; s < C.n_elem; s++){
+                    Eg +=Q[p][r][q][s]*C(p)*C(q)*C(r)*C(s);
+                }
+            }
+        }
+    }
+
+
+
+    //Nuclear repulsion term
+    //    Eg +=nuclearRepulsion(R);
+
+    return Eg;
+
+}
 
 
 /*-----------------------------------------------------------------------------------------------------------*/
-double nuclearRepulsion(){
+double nuclearRepulsion(const mat R){
 
 
-    return 1;
+    return 1/sqrt(dot(R.row(0) - R.row(1),R.row(0)- R.row(1)));
 }
 
 /*-----------------------------------------------------------------------------------------------------------*/
