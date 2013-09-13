@@ -58,10 +58,10 @@ int main()
     double e_dt    = 0.1;
     double n_dt    = 4.3;
     double e_gamma = 1.0;
-    double n_gamma = 50000.0;
+    double n_gamma = 5.0;
 
     double mu = 4.0;
-    double M  = 1000*mu;
+    double M  = 1000*mu*0.5;
 
     double Eg,dEg;
     double a, b, c;
@@ -285,7 +285,6 @@ int main()
         /*-----------------------------------------------------------------------------------------------------------*/
 
         lambda = lambda/(e_dt*e_dt);
-        M = 0.5*M;
         Xplus = (2*X*M + Xminus*(n_gamma*n_dt*0.5 - M) - n_dt*n_dt*(dEg + lambda*dSdX) )/(n_gamma*n_dt*0.5 + M);
 
         R(0,0) = -Xplus*0.5;
@@ -297,7 +296,7 @@ int main()
         X      = Xplus;
 
         //        cout <<"Energy: " << Eg << "  lambda: " << lambda <<"  X: " << X << endl;
-        cout << X << "," << endl;
+        cout << dEg << "," << endl;
 
     }// End of time loop nuclei
 
@@ -327,8 +326,6 @@ int main()
 ##################################################################################################################*/
 
 
-
-/*-----------------------------------------------------------------------------------------------------------*/
 void writeToFile(const mat R, int n){
     stringstream outName;
     ofstream myfile;
