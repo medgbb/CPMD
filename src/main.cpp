@@ -58,7 +58,7 @@ int main()
     double e_dt    = 0.1;
     double n_dt    = 4.3;
     double e_gamma = 1.0;
-    double n_gamma = 5.0;
+    double n_gamma = 50000.0;
 
     double mu = 4.0;
     double M  = 1000*mu;
@@ -85,9 +85,7 @@ int main()
 
 
     mat dh = zeros(nOrbitals,nOrbitals);
-    mat dG = zeros(nOrbitals,nOrbitals);
     mat dS = zeros(nOrbitals,nOrbitals);
-    mat dF = zeros(nOrbitals,nOrbitals);
 
     mat R           = zeros(nNuclei,3);
 
@@ -231,7 +229,7 @@ int main()
 
 
             //            cout.precision(8);
-//                        cout <<"Energy: " << Eg <<" step: " << eStep << endl;
+            //                        cout <<"Energy: " << Eg <<" step: " << eStep << endl;
         }// Endof time loop electrons
 
         //Set up the dh and dS matrix:
@@ -249,6 +247,7 @@ int main()
             }
 
         }
+
 
         /*-----------------------------------------------------------------------------------------------------------*/
         //Set up the dQ array:
@@ -283,24 +282,22 @@ int main()
                 dSdX += dS(p,q) * C(p) * C(q);
             }
         }
-
-        cout <<dSdX <<"    " << dEg <<endl;
         /*-----------------------------------------------------------------------------------------------------------*/
 
-        Xplus = (2*X - (1-n_gamma*n_dt*0.5)*Xminus - n_dt*n_dt*(dEg + lambda*dSdX) )/(1+n_gamma*n_dt*0.5);
-        Xplus /= (0.5*M);
+        lambda = lambda/(e_dt*e_dt);
+        M = 0.5*M;
+        Xplus = (2*X*M + Xminus*(n_gamma*n_dt*0.5 - M) - n_dt*n_dt*(dEg + lambda*dSdX) )/(n_gamma*n_dt*0.5 + M);
 
-        R(0,0) -= Xplus*0.5;
-        R(1,0) += Xplus*0.5;
+        R(0,0) = -Xplus*0.5;
+        R(1,0) =  Xplus*0.5;
 
-//        writeToFile(Rminus,nStep);
-        cout << Xplus << "," << endl;
+        writeToFile(R,nStep);
 
         Xminus = X;
         X      = Xplus;
 
-//        cout <<"Energy: " << Eg << "  lambda: " << lambda <<"  X: " << X << endl;
-//        cout << X << "," << endl;
+        //        cout <<"Energy: " << Eg << "  lambda: " << lambda <<"  X: " << X << endl;
+        cout << X << "," << endl;
 
     }// End of time loop nuclei
 
@@ -528,7 +525,6 @@ double errorFunction_derivative(double t){
 
     else{
         double f = errorFunction(t);
-        t = sqrt(t);
         return (exp(-t)-f)/(2*t) ;
     }
 
@@ -538,24 +534,38 @@ double errorFunction_derivative(double t){
 //*-----------------------------------------------------------------------------------------------------------*/
 double overlapIntegral_derivative(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R){
 
-    double factor  = (alpha(p)*alpha(q))/(alpha(p)+ alpha(q));
-    double X       = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
-    double Spq     = overlapIntegral(p, q, Rp,Rq,alpha,R); // Use precalculated???
-    double overlap = -2*factor*X*Spq;
+    double Rpq = dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq));
 
-    return overlap;
+    if(Rpq==0){
+        return 0.0;
+    }
+    else{
+        double factor  = (alpha(p)*alpha(q))/(alpha(p)+ alpha(q));
+        double X       = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
+        double Spq     = overlapIntegral(p, q, Rp,Rq,alpha,R); // Use precalculated???
+        double overlap = -2*factor*X*Spq;
+
+        return overlap;
+    }
 
 }
 /*-----------------------------------------------------------------------------------------------------------*/
 double kineticIntegral_derivative(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R){
 
-    double factor  = (alpha(p)*alpha(q))/(alpha(p)+ alpha(q));
-    double X       = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
-    double dSdX    = overlapIntegral_derivative(p, q, Rp, Rq,alpha,R);
-    double Spq     = overlapIntegral(p, q, Rp, Rq,alpha,R); // Use precalculated???
-    double kin     = -4*factor*factor*X*Spq + (3*factor - 2*factor*factor*X*X)*dSdX;
+    double Rpq = dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq));
 
-    return kin;
+    if(Rpq==0){
+        return 0.0;
+    }
+    else{
+        double factor  = (alpha(p)*alpha(q))/(alpha(p)+ alpha(q));
+        double X       = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
+        double dSdX    = overlapIntegral_derivative(p, q, Rp, Rq,alpha,R);
+        double Spq     = overlapIntegral(p, q, Rp, Rq,alpha,R); // Use precalculated???
+        double kin     = -4*factor*factor*X*Spq + (3*factor - 2*factor*factor*X*X)*dSdX;
+
+        return kin;
+    }
 }
 
 
@@ -603,8 +613,8 @@ double electronInteractionIntegral_derivative(const int p, const int r, const in
     double A = alpha[p] + alpha[q];
     double B = alpha[r] + alpha[s];
 
-    rowvec P = (p*R.row(Rp)+ q*R.row(Rq))/A;
-    rowvec Q = (r*R.row(Rr)+ s*R.row(Rs))/B;
+    rowvec P = (alpha[p]*R.row(Rp)+ alpha[q]*R.row(Rq))/A;
+    rowvec Q = (alpha[r]*R.row(Rr)+ alpha[s]*R.row(Rs))/B;
 
     double rho = 2*sqrt((A*B)/(acos(-1)*(A+B)));
     double t     = dot(P-Q,P-Q)*(A*B)/(A+B);
@@ -624,6 +634,7 @@ double electronInteractionIntegral_derivative(const int p, const int r, const in
             + rho*dSrsdX*Spq*F0
             + rho*Spq*Srs*dF0
             * (A*B)/(A+B) * 2*dot(P-Q,P-Q)/X;
+
 
     return arg;
 
