@@ -14,34 +14,32 @@ double overlapIntegral(const uint p, const uint q, const uint Rp, const uint Rq,
 double overlapIntegral_derivative(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R);
 
 double kineticIntegral(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R);
+double kineticIntegral_derivative(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R);
 
 double nuclearAttarctionIntegral(const int Z, const uint p, const uint q,
                                  const uint Rp, const uint Rq, vec alpha, mat R);
+double nuclearAttarctionIntegral_derivative(const int Z, const uint p, const uint q,
+                                            const uint Rp, const uint Rq, vec alpha, mat R);
 
 double electronInteractionIntegral(const int p, const int r, const int q, const int s,
                                    const int  Rp, const int  Rr, const int  Rq, const int  Rs,
                                    vec alpha,mat R, mat S);
-
-double nuclearRepulsion(const mat R);
-
-double errorFunction(double arg);
-
-double calculateEnergy(double ****Q, const mat h, const vec C);
-vec normalize(vec C, mat S);
-
-
-
-
-
-
-
-double errorFunction_derivative(double arg);
-
-double kineticIntegral_derivative(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R);
-double nuclearAttarctionIntegral_derivative(const int Z, const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R);
 double electronInteractionIntegral_derivative(const int p, const int r, const int q, const int s,
                                               const int  Rp, const int  Rr, const int  Rq, const int  Rs,
                                               vec alpha, mat R);
+
+double nuclearRepulsion(const mat R);
+double nuclearRepulsion_derivative(const mat R);
+
+double errorFunction(double arg);
+double errorFunction_derivative(double arg);
+
+double calculateEnergy(double ****Q, const mat h, const vec C, const mat R);
+double calculateEnergy_derivative(double ****dQ, const mat dh, const vec C, const mat R);
+
+vec normalize(vec C, mat S);
+
+void writeToFile(const mat R, int n);
 
 int main()
 {
@@ -54,8 +52,8 @@ int main()
     uint nNuclei    = 2;
     uint Z          = 1;
 
-    uint e_nSteps  = 50;
-    uint n_nSteps  = 1.0;
+    uint e_nSteps  = 100;
+    uint n_nSteps  = 100;
 
     double e_dt    = 0.1;
     double n_dt    = 4.3;
@@ -65,8 +63,9 @@ int main()
     double mu = 4.0;
     double M  = 1000*mu;
 
-    double Eg;
-    double a, b, c, lambda;
+    double Eg,dEg;
+    double a, b, c;
+    double lambda = 0.0;
 
 
     vec alpha = zeros(nBasisFunc);
@@ -90,10 +89,9 @@ int main()
     mat dS = zeros(nOrbitals,nOrbitals);
     mat dF = zeros(nOrbitals,nOrbitals);
 
-    mat R      = zeros(nNuclei,3);
-    mat Rplus  = zeros(nNuclei,3);
-    mat Rminus = zeros(nNuclei,3);
+    mat R           = zeros(nNuclei,3);
 
+    double X, Xplus, Xminus;
     double q = 0.125;
     vec C      = ones(nOrbitals)*q;
     vec Cminus = ones(nOrbitals)*q;
@@ -102,31 +100,34 @@ int main()
     vec2 lambdaVec;
 
     double ****Q;
+    double ****dQ;
     Q = new double***[nOrbitals];
+    dQ = new double***[nOrbitals];
     for (uint i = 0; i < nOrbitals; ++i) {
-        Q[i] = new double**[nOrbitals];
+        Q[i]  = new double**[nOrbitals];
+        dQ[i] = new double**[nOrbitals];
 
         for (uint j = 0; j < nOrbitals; ++j){
-            Q[i][j] = new double*[nOrbitals];
+            Q[i][j]  = new double*[nOrbitals];
+            dQ[i][j] = new double*[nOrbitals];
 
             for (uint k = 0; k < nOrbitals; ++k){
-                Q[i][j][k] = new double[nOrbitals];
+                Q[i][j][k]  = new double[nOrbitals];
+                dQ[i][j][k] = new double[nOrbitals];
             }
         }
     }
 
 
     //One nuclei at -0.5ex and the other at 0.5ex
-    Rminus(0,0) = -1.0;
-    Rminus(1,0) =  1.0;
-
-    R(0,0) = -0.5;
-    R(1,0) =  0.5;
+    X = 1.0;
+    Xminus = 1.5;
+    R(0,0) -= X*0.5;
+    R(1,0) += X*0.5;
 
     /*-----------------------------------------------------------------------------------------------------------*/
 
     for(uint nStep = 0; nStep < n_nSteps; nStep++){
-
 
         //Set up the h and S matrix:
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
@@ -171,7 +172,7 @@ int main()
         /*-----------------------------------------------------------------------------------------------------------*/
 
         //Loop over time
-        for(uint step=0; step <= e_nSteps; step++){
+        for(uint eStep=0; eStep <= e_nSteps; eStep++){
 
             //Zero out elements
             G = zeros(nOrbitals,nOrbitals);
@@ -225,15 +226,13 @@ int main()
 
             /*-----------------------------------------------------------------------------------------------------------*/
             //Calculate energy:
-            Eg = calculateEnergy(Q,h,C);
+            Eg = calculateEnergy(Q,h,C,R);
             /*-----------------------------------------------------------------------------------------------------------*/
 
 
-            cout.precision(8);
-            cout <<"Energy: " << Eg <<" step: " << step << endl;
+            //            cout.precision(8);
+//                        cout <<"Energy: " << Eg <<" step: " << eStep << endl;
         }// Endof time loop electrons
-
-
 
         //Set up the dh and dS matrix:
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
@@ -252,7 +251,7 @@ int main()
         }
 
         /*-----------------------------------------------------------------------------------------------------------*/
-        //Set up the Q array:
+        //Set up the dQ array:
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
             for(uint Rr = 0; Rr < R.n_rows; Rr++){
                 for(uint Rq = 0; Rq < R.n_rows; Rq++){
@@ -263,7 +262,7 @@ int main()
                                 for(uint q=0; q <alpha.size(); q++){
                                     for(uint s=0; s <alpha.size(); s++){
 
-                                        Q[p+Rp*4][r+Rr*4][q+Rq*4][s+Rs*4] = electronInteractionIntegral(p,r,q,s,Rp,Rr,Rq,Rs,alpha,R,S);
+                                        dQ[p+Rp*4][r+Rr*4][q+Rq*4][s+Rs*4] = electronInteractionIntegral_derivative(p,r,q,s,Rp,Rr,Rq,Rs,alpha,R);
                                     }
                                 }
                             }
@@ -274,26 +273,34 @@ int main()
             }
         }
 
-        dG = zeros(nOrbitals,nOrbitals);
+        //Calculate dE/dX and dS/dX
+        dEg = calculateEnergy_derivative(dQ,dh,C,R);
 
-        //Set up the G matrix:
+        double dSdX = 0.0;
+
         for(uint p=0; p < nOrbitals; p++){
             for(uint q=0; q < nOrbitals; q++){
-                for(uint r=0; r < nOrbitals; r++){
-                    for(uint s=0; s < nOrbitals; s++){
-                        dG(p,q) += Q[p][r][q][s]*C(r)*C(s);
-                    }
-                }
+                dSdX += dS(p,q) * C(p) * C(q);
             }
         }
 
-        /*-----------------------------------------------------------------------------------------------------------*/
-        //Set up the F matrix
-        dF = dh + dG;
+        cout <<dSdX <<"    " << dEg <<endl;
         /*-----------------------------------------------------------------------------------------------------------*/
 
-        Rplus = 2*R - (1-n_gamma*n_dt*0.5)*Rminus - n_dt;
+        Xplus = (2*X - (1-n_gamma*n_dt*0.5)*Xminus - n_dt*n_dt*(dEg + lambda*dSdX) )/(1+n_gamma*n_dt*0.5);
+        Xplus /= (0.5*M);
 
+        R(0,0) -= Xplus*0.5;
+        R(1,0) += Xplus*0.5;
+
+//        writeToFile(Rminus,nStep);
+        cout << Xplus << "," << endl;
+
+        Xminus = X;
+        X      = Xplus;
+
+//        cout <<"Energy: " << Eg << "  lambda: " << lambda <<"  X: " << X << endl;
+//        cout << X << "," << endl;
 
     }// End of time loop nuclei
 
@@ -305,12 +312,16 @@ int main()
         for (uint j = 0; j < nOrbitals; ++j){
             for (uint k = 0; k < nOrbitals; ++k){
                 delete [] Q[i][j][k];
+                delete [] dQ[i][j][k];
             }
             delete [] Q[i][j];
+            delete [] dQ[i][j];
         }
         delete [] Q[i];
+        delete [] dQ[i];
     }
     delete [] Q;
+    delete [] dQ;
 
     return 0;
 }
@@ -319,7 +330,29 @@ int main()
 ##################################################################################################################*/
 
 
-double calculateEnergy(double ****Q, const mat h, const vec C){
+
+/*-----------------------------------------------------------------------------------------------------------*/
+void writeToFile(const mat R, int n){
+    stringstream outName;
+    ofstream myfile;
+
+    outName << "/home/milad/kurs/data"<< n <<".xyz";
+    myfile.open(outName.str().c_str(),ios::binary);
+    myfile << 2    << endl;
+    myfile << "Hydrogen atoms  " << endl;
+
+    for(uint i=0;  i < R.n_rows; i++){
+        myfile << R.row(i);
+    }
+
+    outName.str( std::string() );
+    outName.clear();
+    myfile.close();
+
+}
+
+/*-----------------------------------------------------------------------------------------------------------*/
+double calculateEnergy(double ****Q, const mat h, const vec C,const mat R){
     double Eg = 0.0;
 
 
@@ -345,9 +378,41 @@ double calculateEnergy(double ****Q, const mat h, const vec C){
 
 
     //Nuclear repulsion term
-    //    Eg +=nuclearRepulsion(R);
+    Eg +=nuclearRepulsion(R);
 
     return Eg;
+
+}
+/*-----------------------------------------------------------------------------------------------------------*/
+double calculateEnergy_derivative(double ****dQ, const mat dh, const vec C,const mat R){
+    double dEg = 0.0;
+
+
+    //One-body term
+    for(uint p=0; p < C.n_elem; p++){
+        for(uint q=0; q < C.n_elem; q++){
+            dEg += C(p)*C(q)*dh(p,q);
+        }
+    }
+    dEg = 2*dEg;
+
+    //Two-body term
+    for(uint p=0; p < C.n_elem; p++){
+        for(uint r=0; r < C.n_elem; r++){
+            for(uint q=0; q< C.n_elem; q++){
+                for(uint s=0; s < C.n_elem; s++){
+                    dEg +=dQ[p][r][q][s]*C(p)*C(q)*C(r)*C(s);
+                }
+            }
+        }
+    }
+
+
+
+    //    Nuclear repulsion term
+    dEg +=nuclearRepulsion_derivative(R);
+
+    return dEg;
 
 }
 
@@ -444,6 +509,13 @@ double nuclearRepulsion(const mat R){
     return 1/sqrt(dot(R.row(0) - R.row(1),R.row(0)- R.row(1)));
 }
 
+/*-----------------------------------------------------------------------------------------------------------*/
+double nuclearRepulsion_derivative(const mat R){
+
+    return -1/dot(R.row(0) - R.row(1),R.row(0)- R.row(1));
+}
+
+
 
 
 
@@ -451,7 +523,7 @@ double nuclearRepulsion(const mat R){
 double errorFunction_derivative(double t){
 
     if (t < 1.0E-6){
-        return 1.0/3.0;
+        return -1.0/3.0;
     }
 
     else{
@@ -467,7 +539,7 @@ double errorFunction_derivative(double t){
 double overlapIntegral_derivative(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R){
 
     double factor  = (alpha(p)*alpha(q))/(alpha(p)+ alpha(q));
-    double X     = sqrt(dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq)));
+    double X       = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
     double Spq     = overlapIntegral(p, q, Rp,Rq,alpha,R); // Use precalculated???
     double overlap = -2*factor*X*Spq;
 
@@ -478,7 +550,7 @@ double overlapIntegral_derivative(const uint p, const uint q, const uint Rp, con
 double kineticIntegral_derivative(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R){
 
     double factor  = (alpha(p)*alpha(q))/(alpha(p)+ alpha(q));
-    double X       = sqrt(dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq)));
+    double X       = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
     double dSdX    = overlapIntegral_derivative(p, q, Rp, Rq,alpha,R);
     double Spq     = overlapIntegral(p, q, Rp, Rq,alpha,R); // Use precalculated???
     double kin     = -4*factor*factor*X*Spq + (3*factor - 2*factor*factor*X*X)*dSdX;
@@ -493,13 +565,14 @@ double nuclearAttarctionIntegral_derivative(const int Z, const uint p, const uin
                                             const uint Rp, const uint Rq, vec alpha, mat R){
 
     double pq    = (alpha(p)+ alpha(q));
-    double X     = sqrt(dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq)));
+    double X     = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
+    double Rpq = sqrt(dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq)));
     double theta = 2*sqrt(pq/acos(-1));
     double Spq   = overlapIntegral(p, q, Rp,Rq,alpha,R);
     double nucAtt;
 
 
-    if(X == 0){
+    if(Rpq == 0){
         double t = pq*X;
         nucAtt   = 2*Z*theta*Spq*X*pq*errorFunction_derivative(t);
     }
@@ -526,7 +599,7 @@ double electronInteractionIntegral_derivative(const int p, const int r, const in
                                               const int Rp, const int Rr, const int Rq, const int Rs,
                                               vec alpha, mat R){
 
-    double X     = sqrt(dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq)));
+    double X = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
     double A = alpha[p] + alpha[q];
     double B = alpha[r] + alpha[s];
 
