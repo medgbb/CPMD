@@ -50,13 +50,14 @@ int main()
     //System configuration:
     uint nBasisFunc = 4;
     uint nNuclei    = 2;
-    uint Z          = 1;
+    int Z           = 1;
 
-    uint e_nSteps  = 100;
-    uint n_nSteps  = 100;
+    uint e_nSteps  = 50;
+    uint n_nSteps  = 3000;
 
     double e_dt    = 0.1;
     double n_dt    = 4.3;
+
     double e_gamma = 1.0;
     double n_gamma = 5.0;
 
@@ -65,7 +66,7 @@ int main()
 
     double Eg,dEg;
     double a, b, c;
-    double lambda = 0.0;
+    double lambda;
 
 
     vec alpha = zeros(nBasisFunc);
@@ -87,13 +88,13 @@ int main()
     mat dh = zeros(nOrbitals,nOrbitals);
     mat dS = zeros(nOrbitals,nOrbitals);
 
-    mat R           = zeros(nNuclei,3);
+    mat R  = zeros(nNuclei,3);
 
     double X, Xplus, Xminus;
-    double q = 0.125;
-    vec C      = ones(nOrbitals)*q;
-    vec Cminus = ones(nOrbitals)*q;
-    vec Cplus  = ones(nOrbitals)*q;
+
+    vec C      = ones(nOrbitals)*0.125;
+    vec Cminus = ones(nOrbitals)*0.125;
+    vec Cplus  = zeros(nOrbitals);
 
     vec2 lambdaVec;
 
@@ -119,10 +120,9 @@ int main()
 
     //One nuclei at -0.5ex and the other at 0.5ex
     X = 1.0;
-    Xminus = 1.5;
-    R(0,0) -= X*0.5;
-    R(1,0) += X*0.5;
-
+    Xminus  = 1.0;
+    R(0,0)  = -X*0.5;
+    R(1,0)  =  X*0.5;
     /*-----------------------------------------------------------------------------------------------------------*/
 
     for(uint nStep = 0; nStep < n_nSteps; nStep++){
@@ -142,7 +142,8 @@ int main()
             }
 
         }
-
+        C = normalize(C,S);
+        Cminus = normalize(Cminus,S);
         /*-----------------------------------------------------------------------------------------------------------*/
         //Set up the Q array:
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
@@ -174,7 +175,6 @@ int main()
 
             //Zero out elements
             G = zeros(nOrbitals,nOrbitals);
-            Eg = 0.0;
 
             //Set up the G matrix:
             for(uint p=0; p < nOrbitals; p++){
@@ -192,15 +192,23 @@ int main()
             F = h + G;
             /*-----------------------------------------------------------------------------------------------------------*/
             //Calculate Ctilde:
-            Cplus = (2*C - (1-e_gamma*e_dt*0.5)*Cminus - e_dt*e_dt* F * C)/(1+e_gamma*e_dt*0.5);
+            Cplus = (2*mu*C - (mu-e_gamma*e_dt*0.5)*Cminus - 4*e_dt*e_dt*F * C)/(mu+e_gamma*e_dt*0.5);
 
             //Calculate lambda:
             a = dot(C, S*S*S*C);
             b = -2*dot(S*Cplus,S*C);
             c = dot(Cplus,S*Cplus)-1.0;
 
-            lambdaVec(0)  = (-b + sqrt(b*b - 4*a*c)) /(2*a);
-            lambdaVec(1)  = (-b - sqrt(b*b - 4*a*c)) /(2*a);
+
+            if(b*b - 4*a*c < 0 ){
+                cerr << "Complex!" <<endl;
+                cerr << a << "   "<< b << "   "<< c <<endl;
+                exit (EXIT_FAILURE);
+
+            }
+
+            lambdaVec(0)  = (-b - sqrt(b*b - 4*a*c)) /(2*a);
+            lambdaVec(1)  = (-b + sqrt(b*b - 4*a*c)) /(2*a);
 
             if(lambdaVec(1) < 0 && lambdaVec(0) < 0 ){
                 cerr << "negative roots!!" <<endl;
@@ -209,7 +217,7 @@ int main()
 
             }
 
-            if(lambdaVec(0) < lambdaVec(1) && lambdaVec(0) > 0.0 ){
+            if(lambdaVec(0) >= 0.0 ){
                 lambda = lambdaVec(0);
             }else{
                 lambda = lambdaVec(1) ;
@@ -218,6 +226,7 @@ int main()
             //Calculate C(t+h):
             Cplus -= lambda*S*C;
 
+
             //update C
             Cminus = C;
             C = Cplus;
@@ -225,12 +234,16 @@ int main()
             /*-----------------------------------------------------------------------------------------------------------*/
             //Calculate energy:
             Eg = calculateEnergy(Q,h,C,R);
+//            cout << Eg << "," << endl;
             /*-----------------------------------------------------------------------------------------------------------*/
 
 
             //            cout.precision(8);
-            //                        cout <<"Energy: " << Eg <<" step: " << eStep << endl;
+            //            cout <<"Energy: " << Eg <<" step: " << eStep << endl;
         }// Endof time loop electrons
+
+
+
 
         //Set up the dh and dS matrix:
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
@@ -272,20 +285,15 @@ int main()
             }
         }
 
-        //Calculate dE/dX and dS/dX
+        /*-----------------------------------------------------------------------------------------------------------*/
+        //Calculate dE/dX
         dEg = calculateEnergy_derivative(dQ,dh,C,R);
 
-        double dSdX = 0.0;
-
-        for(uint p=0; p < nOrbitals; p++){
-            for(uint q=0; q < nOrbitals; q++){
-                dSdX += dS(p,q) * C(p) * C(q);
-            }
-        }
         /*-----------------------------------------------------------------------------------------------------------*/
 
-        lambda = lambda/(e_dt*e_dt);
-        Xplus = (2*X*M + Xminus*(n_gamma*n_dt*0.5 - M) - n_dt*n_dt*(dEg + lambda*dSdX) )/(n_gamma*n_dt*0.5 + M);
+        lambda =(mu+e_gamma*e_dt*0.5)/(2*e_dt*e_dt)*lambda;
+        Xplus = (2*X*M - Xminus*(M-n_gamma*n_dt*0.5) - n_dt*n_dt*(dEg + lambda*dot(C,dS*C)) )/(M + n_gamma*n_dt*0.5 );
+
 
         R(0,0) = -Xplus*0.5;
         R(1,0) =  Xplus*0.5;
@@ -295,8 +303,7 @@ int main()
         Xminus = X;
         X      = Xplus;
 
-        //        cout <<"Energy: " << Eg << "  lambda: " << lambda <<"  X: " << X << endl;
-        cout << dEg << "," << endl;
+        cout << X << "," << endl;
 
     }// End of time loop nuclei
 
@@ -372,7 +379,7 @@ double calculateEnergy(double ****Q, const mat h, const vec C,const mat R){
 
 
     //Nuclear repulsion term
-    Eg +=nuclearRepulsion(R);
+//        Eg +=nuclearRepulsion(R);
 
     return Eg;
 
@@ -400,8 +407,6 @@ double calculateEnergy_derivative(double ****dQ, const mat dh, const vec C,const
             }
         }
     }
-
-
 
     //    Nuclear repulsion term
     dEg +=nuclearRepulsion_derivative(R);
@@ -573,19 +578,18 @@ double nuclearAttarctionIntegral_derivative(const int Z, const uint p, const uin
 
     double pq    = (alpha(p)+ alpha(q));
     double X     = sqrt(dot(R.row(0)-R.row(1),R.row(0)-R.row(1)));
-    double Rpq = sqrt(dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq)));
+    double Rpq   = sqrt(dot(R.row(Rp)-R.row(Rq),R.row(Rp)-R.row(Rq)));
     double theta = 2*sqrt(pq/acos(-1));
     double Spq   = overlapIntegral(p, q, Rp,Rq,alpha,R);
     double nucAtt;
 
 
     if(Rpq == 0){
-        double t = pq*X;
+        double t = pq*X*X;
         nucAtt   = 2*Z*theta*Spq*X*pq*errorFunction_derivative(t);
     }
     else{
         double dSdX    = overlapIntegral_derivative(p, q, Rp, Rq, alpha, R);
-        rowvec P = (p*R.row(Rp)+ q*R.row(Rq))/pq;
 
         double F0p = errorFunction(X*X*alpha[p]*alpha[p]/pq);
         double F0q = errorFunction(X*X*alpha[q]*alpha[q]/pq);
@@ -598,7 +602,7 @@ double nuclearAttarctionIntegral_derivative(const int Z, const uint p, const uin
     }
 
 
-    return nucAtt;
+    return -nucAtt;
 }
 
 /*-----------------------------------------------------------------------------------------------------------*/
