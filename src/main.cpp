@@ -52,14 +52,14 @@ int main()
     uint nNuclei    = 2;
     int Z           = 1;
 
-    uint e_nSteps  = 50;
-    uint n_nSteps  = 3000;
+    uint e_nSteps  = 400;
+    uint n_nSteps  = 2000;
 
     double e_dt    = 0.1;
     double n_dt    = 4.3;
 
     double e_gamma = 1.0;
-    double n_gamma = 5.0;
+    double n_gamma = 0.0;
 
     double mu = 4.0;
     double M  = 1000*mu*0.5;
@@ -244,7 +244,6 @@ int main()
 
 
 
-
         //Set up the dh and dS matrix:
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
             for(uint Rq = 0; Rq < R.n_rows; Rq++){
@@ -303,11 +302,10 @@ int main()
         Xminus = X;
         X      = Xplus;
 
+        cout.precision(8);
         cout << X << "," << endl;
 
     }// End of time loop nuclei
-
-
     /*-----------------------------------------------------------------------------------------------------------*/
 
     //De-Allocate memory to prevent memory leak
