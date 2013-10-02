@@ -53,7 +53,7 @@ int main()
     int Z           = 1;
 
     uint e_nSteps  = 400;
-    uint n_nSteps  = 2000;
+    uint n_nSteps  = 1000;
 
     double e_dt    = 0.1;
     double n_dt    = 4.3;
@@ -119,8 +119,8 @@ int main()
 
 
     //One nuclei at -0.5ex and the other at 0.5ex
-    X = 1.0;
-    Xminus  = 1.0;
+    X = 1;
+    Xminus  = 1;
     R(0,0)  = -X*0.5;
     R(1,0)  =  X*0.5;
     /*-----------------------------------------------------------------------------------------------------------*/
@@ -303,7 +303,7 @@ int main()
         X      = Xplus;
 
         cout.precision(8);
-        cout << X << "," << endl;
+        cout << "[" << X << "," << Eg << "],"<< endl;
 
     }// End of time loop nuclei
     /*-----------------------------------------------------------------------------------------------------------*/
@@ -337,8 +337,8 @@ void writeToFile(const mat R, int n){
 
     outName << "/home/milad/kurs/data"<< n <<".xyz";
     myfile.open(outName.str().c_str(),ios::binary);
-    myfile << 2    << endl;
-    myfile << "Hydrogen atoms  " << endl;
+    myfile << 2    << "\n";
+    myfile << "Hydrogen atoms  " << "\n";
 
     for(uint i=0;  i < R.n_rows; i++){
         myfile << R.row(i);
@@ -377,7 +377,7 @@ double calculateEnergy(double ****Q, const mat h, const vec C,const mat R){
 
 
     //Nuclear repulsion term
-//        Eg +=nuclearRepulsion(R);
+        Eg +=nuclearRepulsion(R);
 
     return Eg;
 
