@@ -1,12 +1,10 @@
-#include <cmath>
-#include <stdlib.h>
-#include <stdio.h>
 #include <iostream>
 #include <armadillo>
-#include <iomanip>
+#include <hf.h>
 
 using namespace arma;
 using namespace std;
+using namespace hf;
 
 
 
@@ -43,7 +41,6 @@ void writeToFile(const mat R, int n);
 
 int main()
 {
-
     /*-----------------------------------------------------------------------------------------------------------*/
 
 

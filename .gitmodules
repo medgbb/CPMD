@@ -1,6 +1,3 @@
-[submodule "lib"]
-	path = lib
-	url = git@github.com:miladh/HF.git
-[submodule "library/HF"]
-	path = library/HF
+[submodule "hflib"]
+	path = hflib
 	url = git@github.com:miladh/HF.git
