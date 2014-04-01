@@ -1,5 +1,7 @@
 #include <iostream>
 #include <armadillo>
+#include <boost/mpi.hpp>
+
 #include <hf.h>
 
 using namespace arma;
@@ -41,7 +43,20 @@ void writeToFile(const mat R, int n);
 
 int main()
 {
+    boost::mpi::environment env;
+    boost::mpi::communicator world;
+    boost::mpi::timer timer;
+    timer.restart();
     /*-----------------------------------------------------------------------------------------------------------*/
+
+    vector<Atom *> atoms;
+    atoms.push_back(new Atom("infiles/turbomole/atom_1_basis_3-21G.tm", { -0.69, 0, 0 }));
+    atoms.push_back(new Atom("infiles/turbomole/atom_1_basis_3-21G.tm", { 0.69, 0, 0 }));
+    ElectronicSystem *system = new ElectronicSystem();
+    system->addAtoms(atoms);
+    HFsolver* solver;
+    solver = new RHF(system);
+    solver->runSolver();
 
 
     //System configuration:
