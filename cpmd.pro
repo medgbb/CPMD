@@ -6,11 +6,11 @@ CONFIG -= qt
 SOURCES += src/cpmd.cpp
 
 LIBS += -llapack -larmadillo
-LIBS += -L$$TOP_PWD/library/HF/lib -lhartree-fock
+LIBS += -L$$TOP_PWD/hflib/lib -lhartree-fock
 
 
 #QMAKE_LIBDIR += $$TOP_PWD/library/HF/lib
-INCLUDEPATH += $$TOP_PWD/library/HF/include
+INCLUDEPATH += $$TOP_PWD/hflib/include
 
 
 QMAKE_CXXFLAGS += -std=c++0x
