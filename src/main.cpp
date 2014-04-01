@@ -52,8 +52,8 @@ int main()
     uint nNuclei    = 2;
     int Z           = 1;
 
-    uint e_nSteps  = 400;
-    uint n_nSteps  = 1000;
+    uint e_nSteps  = 100;
+    uint n_nSteps  = 300;
 
     double e_dt    = 0.1;
     double n_dt    = 4.3;
@@ -61,8 +61,8 @@ int main()
     double e_gamma = 1.0;
     double n_gamma = 0.0;
 
-    double mu = 4.0;
-    double M  = 1000*mu*0.5;
+    double mu = 1.0;
+    double M  = 1836.5*mu*0.5;
 
     double Eg,dEg;
     double a, b, c;
@@ -119,8 +119,8 @@ int main()
 
 
     //One nuclei at -0.5ex and the other at 0.5ex
-    X = 1;
-    Xminus  = 1;
+    X = 1.35;
+    Xminus  = X;
     R(0,0)  = -X*0.5;
     R(1,0)  =  X*0.5;
     /*-----------------------------------------------------------------------------------------------------------*/
@@ -303,7 +303,8 @@ int main()
         X      = Xplus;
 
         cout.precision(8);
-        cout << "[" << X << "," << Eg << "],"<< endl;
+//        cout << "[" << X << "," << Eg << "],"<< endl;
+            cout << X << "," << endl;
 
     }// End of time loop nuclei
     /*-----------------------------------------------------------------------------------------------------------*/
