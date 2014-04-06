@@ -10,7 +10,6 @@ LIBS += $$system(mpicxx --showme:link)
 QMAKE_CXXFLAGS += $$system(mpicxx --showme:compile)
 
 
-#QMAKE_LIBDIR += $$TOP_PWD/hflib/lib
 INCLUDEPATH += $$TOP_PWD/hflib/include
 
 

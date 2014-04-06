@@ -1,14 +1,8 @@
 #include <iostream>
 #include <armadillo>
-#include <boost/mpi.hpp>
-
-#include <hf.h>
 
 using namespace arma;
 using namespace std;
-using namespace hf;
-
-
 
 double overlapIntegral(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R);
 double overlapIntegral_derivative(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R);
@@ -41,54 +35,40 @@ vec normalize(vec C, mat S);
 
 void writeToFile(const mat R, int n);
 
+
+
 int main()
 {
-    boost::mpi::environment env;
-    boost::mpi::communicator world;
-    boost::mpi::timer timer;
-    timer.restart();
     /*-----------------------------------------------------------------------------------------------------------*/
+    //Settings:
 
-    vector<Atom *> atoms;
-    atoms.push_back(new Atom("infiles/turbomole/atom_1_basis_3-21G.tm", { -0.69, 0, 0 }));
-    atoms.push_back(new Atom("infiles/turbomole/atom_1_basis_3-21G.tm", { 0.69, 0, 0 }));
-    ElectronicSystem *system = new ElectronicSystem();
-    system->addAtoms(atoms);
-    HFsolver* solver;
-    solver = new RHF(system);
-    solver->runSolver();
-
-
-    //System configuration:
-    uint nBasisFunc = 4;
-    uint nNuclei    = 2;
-    int Z           = 1;
-
-    uint e_nSteps  = 100;
-    uint n_nSteps  = 300;
+    uint e_nSteps  = 50;
+    uint n_nSteps  = 1;
 
     double e_dt    = 0.1;
     double n_dt    = 4.3;
 
     double e_gamma = 1.0;
-    double n_gamma = 0.0;
+    double n_gamma = 5.0;
 
-    double mu = 1.0;
+    double mu = 0.5;
     double M  = 1836.5*mu*0.5;
 
+
+    double X = 1.0;
+    double Xplus, Xminus;
+    Xminus  = X;
+
+    uint nBasisFunc = 4;
+    uint nNuclei    = 2;
+    int Z           = 1;
+
+    /*-----------------------------------------------------------------------------------------------------------*/
+    //Initialization:
     double Eg,dEg;
     double a, b, c;
     double lambda;
 
-
-    vec alpha = zeros(nBasisFunc);
-    alpha(0) = 13.00773;
-    alpha(1) = 1.962079;
-    alpha(2) = 0.444529;
-    alpha(3) = 0.1219492;
-
-    /*-----------------------------------------------------------------------------------------------------------*/
-    //Initilize:
     uint nOrbitals = nBasisFunc * nNuclei;
 
     mat h = zeros(nOrbitals,nOrbitals);
@@ -101,8 +81,6 @@ int main()
     mat dS = zeros(nOrbitals,nOrbitals);
 
     mat R  = zeros(nNuclei,3);
-
-    double X, Xplus, Xminus;
 
     vec C      = ones(nOrbitals)*0.125;
     vec Cminus = ones(nOrbitals)*0.125;
@@ -130,16 +108,23 @@ int main()
     }
 
 
-    //One nuclei at -0.5ex and the other at 0.5ex
-    X = 1.35;
-    Xminus  = X;
     R(0,0)  = -X*0.5;
     R(1,0)  =  X*0.5;
+
+    vec alpha = zeros(nBasisFunc);
+    alpha(0) = 13.00773;
+    alpha(1) = 1.962079;
+    alpha(2) = 0.444529;
+    alpha(3) = 0.1219492;
+
     /*-----------------------------------------------------------------------------------------------------------*/
 
+    //Start nuclear steps:
     for(uint nStep = 0; nStep < n_nSteps; nStep++){
 
-        //Set up the h and S matrix:
+
+
+        //Calculate the overlap and the one-electron integral
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
             for(uint Rq = 0; Rq < R.n_rows; Rq++){
 
@@ -154,10 +139,7 @@ int main()
             }
 
         }
-        C = normalize(C,S);
-        Cminus = normalize(Cminus,S);
-        /*-----------------------------------------------------------------------------------------------------------*/
-        //Set up the Q array:
+        //Calculate the two-electron integral
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
             for(uint Rr = 0; Rr < R.n_rows; Rr++){
                 for(uint Rq = 0; Rq < R.n_rows; Rq++){
@@ -179,38 +161,36 @@ int main()
             }
         }
 
-
         /*-----------------------------------------------------------------------------------------------------------*/
+        C = normalize(C,S);
+        Cminus = normalize(Cminus,S);
 
-        //Loop over time
+
+        //Start electronic steps:
         for(uint eStep=0; eStep <= e_nSteps; eStep++){
 
-            //Zero out elements
-            G = zeros(nOrbitals,nOrbitals);
 
-            //Set up the G matrix:
+            //Set up the Fock matrix:
             for(uint p=0; p < nOrbitals; p++){
                 for(uint q=0; q < nOrbitals; q++){
+                    F(p,q) = h(p,q);
                     for(uint r=0; r < nOrbitals; r++){
                         for(uint s=0; s < nOrbitals; s++){
-                            G(p,q) += Q[p][r][q][s]*C(r)*C(s);
+                            F(p,q) += Q[p][r][q][s]*C(r)*C(s);
                         }
                     }
                 }
             }
 
+
             /*-----------------------------------------------------------------------------------------------------------*/
-            //Set up the F matrix
-            F = h + G;
-            /*-----------------------------------------------------------------------------------------------------------*/
-            //Calculate Ctilde:
+            //Calculate the new cofficiet vector
             Cplus = (2*mu*C - (mu-e_gamma*e_dt*0.5)*Cminus - 4*e_dt*e_dt*F * C)/(mu+e_gamma*e_dt*0.5);
 
             //Calculate lambda:
             a = dot(C, S*S*S*C);
             b = -2*dot(S*Cplus,S*C);
             c = dot(Cplus,S*Cplus)-1.0;
-
 
             if(b*b - 4*a*c < 0 ){
                 cerr << "Complex!" <<endl;
@@ -243,20 +223,16 @@ int main()
             Cminus = C;
             C = Cplus;
 
-            /*-----------------------------------------------------------------------------------------------------------*/
+
             //Calculate energy:
             Eg = calculateEnergy(Q,h,C,R);
-//            cout << Eg << "," << endl;
-            /*-----------------------------------------------------------------------------------------------------------*/
+            cout.precision(8);
+            cout <<"Energy: " << Eg <<"     step: " << eStep << endl;
 
-
-            //            cout.precision(8);
-            //            cout <<"Energy: " << Eg <<" step: " << eStep << endl;
         }// Endof time loop electrons
+        /*-----------------------------------------------------------------------------------------------------------*/
 
-
-
-        //Set up the dh and dS matrix:
+        //Calculate the geometrical dervative of the overlap and one-electron integral
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
             for(uint Rq = 0; Rq < R.n_rows; Rq++){
 
@@ -272,9 +248,7 @@ int main()
 
         }
 
-
-        /*-----------------------------------------------------------------------------------------------------------*/
-        //Set up the dQ array:
+        //Calculate the geometrical dervative of the two-electron integral
         for(uint Rp = 0; Rp < R.n_rows; Rp++){
             for(uint Rr = 0; Rr < R.n_rows; Rr++){
                 for(uint Rq = 0; Rq < R.n_rows; Rq++){
@@ -297,26 +271,26 @@ int main()
         }
 
         /*-----------------------------------------------------------------------------------------------------------*/
-        //Calculate dE/dX
+        //Calculate the energy gradient:
         dEg = calculateEnergy_derivative(dQ,dh,C,R);
 
-        /*-----------------------------------------------------------------------------------------------------------*/
-
+        //Find the new bondlength
         lambda =(mu+e_gamma*e_dt*0.5)/(2*e_dt*e_dt)*lambda;
         Xplus = (2*X*M - Xminus*(M-n_gamma*n_dt*0.5) - n_dt*n_dt*(dEg + lambda*dot(C,dS*C)) )/(M + n_gamma*n_dt*0.5 );
 
+
+        //Update core positions
+        Xminus = X;
+        X      = Xplus;
 
         R(0,0) = -Xplus*0.5;
         R(1,0) =  Xplus*0.5;
 
         writeToFile(R,nStep);
 
-        Xminus = X;
-        X      = Xplus;
 
         cout.precision(8);
-//        cout << "[" << X << "," << Eg << "],"<< endl;
-            cout << X << "," << endl;
+        cout << "[" << X << "," << Eg << "],"<< endl;
 
     }// End of time loop nuclei
     /*-----------------------------------------------------------------------------------------------------------*/
@@ -390,7 +364,7 @@ double calculateEnergy(double ****Q, const mat h, const vec C,const mat R){
 
 
     //Nuclear repulsion term
-        Eg +=nuclearRepulsion(R);
+    Eg +=nuclearRepulsion(R);
 
     return Eg;
 
@@ -451,7 +425,6 @@ double errorFunction(double t){
     }
 
 }
-
 /*-----------------------------------------------------------------------------------------------------------*/
 double overlapIntegral(const uint p, const uint q, const uint Rp, const uint Rq, vec alpha, mat R){
 
@@ -524,10 +497,6 @@ double nuclearRepulsion_derivative(const mat R){
 
     return -1/dot(R.row(0) - R.row(1),R.row(0)- R.row(1));
 }
-
-
-
-
 
 /*-----------------------------------------------------------------------------------------------------------*/
 double errorFunction_derivative(double t){
